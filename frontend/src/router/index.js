@@ -16,6 +16,10 @@ import PreludeReadout from '../prelude/pages/Readout.vue'
 const routes = [
   {
     path: '/',
+    redirect: '/prelude'
+  },
+  {
+    path: '/mirofish',
     name: 'Home',
     component: Home
   },
