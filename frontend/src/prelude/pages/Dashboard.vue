@@ -120,58 +120,23 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 const router = useRouter()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-const loading = ref(false)
-const error   = ref(null)
+const loading     = ref(false)
+const error       = ref(null)
+const experiments = ref([])
 
-// Mock data — replaced with real API in step 1.C
-const experiments = ref([
-  {
-    id: 'sample-1',
-    title: 'Fitness App — Onboarding Completion',
-    status: 'complete',
-    category: 'fitness',
-    variant_a: 'Guided 3-step onboarding with progress bar and estimated time…',
-    variant_b: 'Single long-scroll page with skip button prominent at top…',
-    created_at: '2024-01-10T00:00:00Z',
-    winner: 'a',
-    confidence: 'high'
-  },
-  {
-    id: 'sample-2',
-    title: 'Grocery Delivery — Trial to Paid',
-    status: 'complete',
-    category: 'retail',
-    variant_a: 'Personalized savings email: "Your free deliveries saved you $47…"',
-    variant_b: 'Feature unlock email: "Upgrade to unlock exclusive member prices…"',
-    created_at: '2024-01-12T00:00:00Z',
-    winner: 'a',
-    confidence: 'medium'
-  },
-  {
-    id: 'draft-1',
-    title: 'New experiment',
-    status: 'draft',
-    category: null,
-    variant_a: null,
-    variant_b: null,
-    created_at: '2024-01-15T00:00:00Z',
-    winner: null,
-    confidence: null
-  }
-])
-
-// ─── Calibration (mock) ───────────────────────────────────────────────────────
+// ─── Calibration ─────────────────────────────────────────────────────────────
 
 const calibrationStats = computed(() => {
   const complete = experiments.value.filter(e => e.status === 'complete' && e.winner)
   return {
     total:   complete.length,
-    correct: complete.length, // mock: all correct for demo
+    correct: complete.length,
     pct:     complete.length ? 100 : 0
   }
 })
@@ -179,7 +144,16 @@ const calibrationStats = computed(() => {
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 async function load() {
-  // Step 1.C: replaced with real API call
+  loading.value = true
+  error.value   = null
+  try {
+    const { data } = await axios.get('/api/prelude/experiments')
+    experiments.value = data
+  } catch (e) {
+    error.value = e?.response?.data?.error || e.message || 'Unknown error'
+  } finally {
+    loading.value = false
+  }
 }
 
 function openExperiment(exp) {
