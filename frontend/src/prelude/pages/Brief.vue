@@ -50,12 +50,25 @@
             </button>
           </div>
 
+          <!-- Use-case presets (filtered by category) -->
+          <div v-if="presetsForCategory.length" class="p-presets">
+            <label class="p-label" style="margin-top:20px">Or start from a use case:</label>
+            <div class="p-preset-list">
+              <button
+                v-for="preset in presetsForCategory"
+                :key="preset.label"
+                class="p-preset-btn"
+                @click="applyPreset(preset)"
+              >{{ preset.label }}</button>
+            </div>
+          </div>
+
           <div class="p-field" style="margin-top:28px">
             <label class="p-label">What's your product?</label>
             <input
               v-model="form.product_context"
               class="p-input"
-              placeholder="e.g. A fitness tracking app with free and paid tiers"
+              placeholder="e.g. Fashion e-commerce checkout flow"
               @input="autosave"
             />
           </div>
@@ -210,7 +223,7 @@
               @click="submit"
             >
               <span v-if="submitting">Setting up your experiment…</span>
-              <span v-else">Set up experiment →</span>
+              <span v-else>Set up experiment →</span>
             </button>
           </div>
         </div>
@@ -222,7 +235,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 
@@ -247,13 +260,87 @@ const form = reactive({
 })
 
 const categories = [
-  { value: 'fitness',      icon: '🏋️', label: 'Fitness'  },
-  { value: 'retail',       icon: '🛒', label: 'Retail'   },
-  { value: 'fintech',      icon: '💳', label: 'Fintech'  },
-  { value: 'food',         icon: '🍕', label: 'Food'     },
-  { value: 'travel',       icon: '✈️', label: 'Travel'   },
-  { value: 'other',        icon: '📱', label: 'Other'    },
+  { value: 'grocery',             icon: '🛒', label: 'Grocery'              },
+  { value: 'grocery_loyalty',     icon: '💳', label: 'Grocery — Loyalty'    },
+  { value: 'grocery_subscription',icon: '📦', label: 'Grocery — Subscription'},
+  { value: 'fashion',             icon: '👗', label: 'Fashion'              },
+  { value: 'fashion_launch',      icon: '✨', label: 'Fashion — Launch'     },
+  { value: 'fashion_returns',     icon: '↩️', label: 'Fashion — Returns'    },
 ]
+
+// ─── Retail use-case presets ─────────────────────────────────────────────────
+const USE_CASE_PRESETS = [
+  {
+    label: 'Checkout abandonment recovery',
+    category: 'fashion',
+    product_context: 'Fashion e-commerce checkout flow',
+    problem: '70% of users who add items to cart abandon at the payment step. Highest drop-off is between shipping cost reveal and payment entry.',
+    variant_a: 'Recovery email 1 hour after abandonment: "Your cart is reserved for 2 hours. Free shipping unlocked — no minimum." Removes the #1 friction point with urgency.',
+    variant_b: 'Recovery email 1 hour after abandonment: "Still thinking? Here\'s 10% off your first order. Code: COMEBACK10." Discount-led recovery with no urgency.',
+    target_user: 'Urban shoppers 22-38, mobile-first, fashion-conscious, price-sensitive, abandoned a cart in the last 7 days',
+    success_metric: 'Checkout completion within 2 hours of recovery email',
+  },
+  {
+    label: 'Loyalty program upsell',
+    category: 'grocery_loyalty',
+    product_context: 'Grocery chain loyalty membership program',
+    problem: 'Only 12% of weekly shoppers have joined the loyalty program. Those who join spend 35% more per visit, but the signup funnel converts at just 4%.',
+    variant_a: 'Points-based program: "Earn 1 point per £1 spent. 500 points = £5 off." Simple, transparent, no tier complexity. Shown at self-checkout after payment.',
+    variant_b: 'Tier-based membership: "Join Silver free → unlock Gold at £50/month spend for 10% off fresh produce." Aspirational, gamified, shown via in-app push notification.',
+    target_user: 'Weekly grocery shoppers spending £60-120 per visit, mix of families and singles, price-aware but not extreme coupon users',
+    success_metric: 'Loyalty program signup within 2 weeks of first exposure',
+  },
+  {
+    label: 'New collection launch',
+    category: 'fashion_launch',
+    product_context: 'Mid-range fashion brand seasonal collection drop',
+    problem: 'New collections generate 80% of traffic in the first 48 hours but only 15% of that traffic converts. Most visitors browse but don\'t buy — "I\'ll wait for the sale" is the dominant sentiment.',
+    variant_a: 'Early access email to existing customers: "Shop the Spring collection 24 hours before everyone else. No discount — just first pick." Exclusivity-driven, no price lever.',
+    variant_b: 'Launch week push notification: "Spring is here — 15% off your first piece from the new collection. Code: SPRING15." Discount-driven, broader audience.',
+    target_user: 'Existing customers who purchased in the last 6 months, fashion-engaged, follow the brand on social media, 25-40',
+    success_metric: 'First purchase from new collection within 72 hours of launch',
+  },
+  {
+    label: 'Subscription bundle introduction',
+    category: 'grocery_subscription',
+    product_context: 'Online grocery delivery subscription box',
+    problem: 'Average order frequency is 1.2x/month. Customers order reactively when they run out. A subscription model could increase frequency to 4x/month but previous attempts felt inflexible.',
+    variant_a: 'Fixed weekly essentials box (£25): milk, bread, eggs, fruit, veg — curated by the algorithm based on past purchases. Cancel or skip any week.',
+    variant_b: 'Build-your-own weekly box: pick 10-15 items from a curated list of 50 essentials, locked in for 4 weeks at a 12% discount. Modify items each week.',
+    target_user: 'Households ordering groceries online at least 2x/month, £80+ average basket, have used the platform for 3+ months',
+    success_metric: 'Subscription activation and retention through week 4 (no cancel/skip)',
+  },
+  {
+    label: 'Returns experience redesign',
+    category: 'fashion_returns',
+    product_context: 'Fashion e-commerce returns and exchange flow',
+    problem: '32% of fashion orders are returned. The current returns process takes 3-5 days to get a refund. 40% of returners never purchase again — returns are a churn event.',
+    variant_a: 'Pre-printed free returns label in the box + instant refund on courier scan. Zero friction, maximum trust, but expensive at scale.',
+    variant_b: 'QR code drop-off at partner locations (convenience stores) + exchange-first flow: "Swap for a different size?" before offering refund. Lower cost, attempts save.',
+    target_user: 'Online fashion buyers who have returned at least one item in the last 3 months, 22-45, buy 2+ items per order',
+    success_metric: 'Repurchase within 30 days of return completion',
+  },
+]
+
+// ─── Preset helpers ──────────────────────────────────────────────────────────
+const presetsForCategory = computed(() => {
+  if (!form.category) return []
+  return USE_CASE_PRESETS.filter(p => p.category === form.category)
+})
+
+function applyPreset(preset) {
+  Object.assign(form, {
+    category: preset.category,
+    product_context: preset.product_context,
+    problem: preset.problem,
+    variant_a: preset.variant_a,
+    variant_b: preset.variant_b,
+    target_user: preset.target_user,
+    success_metric: preset.success_metric,
+  })
+  step.value = 3  // Jump to the final step since all fields are filled
+  autosave()
+}
 
 // ─── Assist state ─────────────────────────────────────────────────────────────
 const assistLoading = reactive({ problem: false, variant_a: false, variant_b: false })
@@ -514,6 +601,31 @@ onMounted(async () => {
 }
 .p-cat-icon { font-size: 24px; }
 .p-cat-label { font-size: 13px; font-weight: 500; }
+
+/* Preset buttons */
+.p-presets { margin-top: 4px; }
+.p-preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.p-preset-btn {
+  background: #111413;
+  border: 1px solid #1E2421;
+  border-radius: 8px;
+  color: #8A9490;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.p-preset-btn:hover {
+  border-color: #4AE89A;
+  color: #4AE89A;
+  background: #0D2E1E;
+}
 
 /* Fields */
 .p-field { display: flex; flex-direction: column; gap: 8px; }

@@ -26,25 +26,33 @@
         </div>
       </div>
 
+      <!-- Loading state -->
+      <div v-if="loading" class="r-loading">
+        <div class="r-loading-spinner"></div>
+        <p>Generating prediction readout...</p>
+      </div>
+      <div v-if="loadError" class="r-error">
+        <p>{{ loadError }}</p>
+        <button class="p-btn-primary" @click="loadPrediction">Retry</button>
+      </div>
+
       <!-- Scrolling report -->
-      <div class="r-report">
+      <div v-if="!loading && prediction" class="r-report">
 
         <!-- ═══════ Section 1: The Verdict ═══════ -->
         <section class="r-section r-hero">
-          <div class="r-hero-verdict">Variant A is predicted to win</div>
+          <div class="r-hero-verdict">Variant {{ prediction.winner?.toUpperCase() }} is predicted to win</div>
           <p class="r-hero-explain">
-            Guided onboarding reduces abandonment by removing the "how long will this take?"
-            hesitation at step 1. Users who see a progress indicator commit earlier and
-            complete setup at nearly double the rate.
+            {{ prediction.confidence_rationale }}
           </p>
           <div class="r-hero-confidence">
             <span class="r-conf-dots">
-              <span class="r-conf-dot filled"></span>
-              <span class="r-conf-dot filled"></span>
-              <span class="r-conf-dot filled"></span>
+              <span class="r-conf-dot" :class="prediction.confidence !== 'low' ? 'filled' : 'empty'"></span>
+              <span class="r-conf-dot" :class="prediction.confidence !== 'low' ? 'filled' : 'empty'"></span>
+              <span class="r-conf-dot" :class="prediction.confidence === 'high' ? 'filled' : 'empty'"></span>
               <span class="r-conf-dot empty"></span>
             </span>
-            <span class="r-conf-label">HIGH</span>
+            <span class="r-conf-label">{{ (prediction.confidence || 'medium').toUpperCase() }}</span>
           </div>
           <div class="r-hero-actions">
             <button class="p-btn-secondary" @click="shareReport">Share</button>
@@ -111,9 +119,11 @@
               </div>
             </div>
           </div>
-          <div class="r-auto-insight">
-            Step 2 ("About You") causes 3x more friction in Variant B. Users reported
-            feeling overwhelmed by the number of fields without knowing how much remained.
+          <div v-if="frictionSteps.length" class="r-auto-insight">
+            {{ frictionSteps.reduce((worst, s) => Math.abs(s.a - s.b) > Math.abs(worst.a - worst.b) ? s : worst, frictionSteps[0]).label }}
+            shows the largest friction gap between variants
+            (A: {{ frictionSteps.reduce((worst, s) => Math.abs(s.a - s.b) > Math.abs(worst.a - worst.b) ? s : worst, frictionSteps[0]).a }}%
+             vs B: {{ frictionSteps.reduce((worst, s) => Math.abs(s.a - s.b) > Math.abs(worst.a - worst.b) ? s : worst, frictionSteps[0]).b }}%).
           </div>
         </section>
 
@@ -185,10 +195,14 @@
             <span class="r-legend-item"><span class="r-legend-swatch" style="background:#4AE89A"></span> Variant A</span>
             <span class="r-legend-item"><span class="r-legend-swatch r-legend-dashed" style="background:#F07858"></span> Variant B</span>
           </div>
-          <div class="r-auto-insight">
-            Variant A maintains positive sentiment throughout the journey. Variant B drops
-            sharply at the skip button, where users interpret the option as a signal that the
-            process isn't worth completing.
+          <div v-if="sentimentA.length" class="r-auto-insight">
+            {{ (() => {
+              const avgA = sentimentA.reduce((s, v) => s + v, 0) / sentimentA.length
+              const avgB = sentimentB.length ? sentimentB.reduce((s, v) => s + v, 0) / sentimentB.length : 0
+              return avgA > avgB
+                ? `Variant A maintains higher overall sentiment (${avgA.toFixed(2)}) vs Variant B (${avgB.toFixed(2)}), suggesting stronger positive reception across the journey.`
+                : `Variant B shows stronger sentiment (${avgB.toFixed(2)}) vs Variant A (${avgA.toFixed(2)}), indicating the new approach resonates better with agents.`
+            })() }}
           </div>
         </section>
 
@@ -201,7 +215,7 @@
                 <span class="r-story-name">{{ agent.name }}</span>
                 <span
                   class="r-story-outcome"
-                  :class="agent.outcome === 'Completed' ? 'r-outcome-good' : 'r-outcome-bad'"
+                  :class="agent.outcome === 'Positive' ? 'r-outcome-good' : agent.outcome === 'Negative' ? 'r-outcome-bad' : ''"
                 >{{ agent.outcome }}</span>
               </div>
               <div class="r-story-blend">
@@ -220,41 +234,24 @@
         <!-- ═══════ Section 6: Mechanism + Risk + Watch ═══════ -->
         <section class="r-section">
           <div class="r-analysis-block">
-            <h3 class="r-analysis-label">WHY A WINS</h3>
+            <h3 class="r-analysis-label">WHY {{ prediction.winner?.toUpperCase() }} WINS</h3>
             <p class="r-analysis-body">
-              Variant A's progress indicator creates a completion contract: once users see "Step 1 of 4,"
-              they mentally commit to the sequence. This anchoring effect reduces the cognitive overhead of
-              deciding whether to continue at each screen. The guided flow also front-loads lightweight
-              questions (name, age), building momentum before asking for the harder commitment (goals, plan
-              selection). Variant B's open-ended form triggers decision fatigue in the first 30 seconds.
+              {{ prediction.mechanism }}
             </p>
           </div>
 
           <div class="r-analysis-block">
             <h3 class="r-analysis-label r-analysis-label--risk">KEY RISK</h3>
             <p class="r-analysis-body">
-              Power users (Early Adopters) find the step-by-step flow patronizing. If your user base skews
-              toward experienced fitness app users, the guided flow may increase time-to-value without
-              improving retention. Consider offering a "Quick setup" escape hatch at step 1 for returning users.
+              {{ prediction.key_risk }}
             </p>
           </div>
 
           <div class="r-analysis-block">
             <h3 class="r-analysis-label">THREE THINGS TO WATCH</h3>
             <ol class="r-watch-list">
-              <li>
-                <strong>Step 2 completion rate:</strong> If "About You" drops below 65% in Variant A,
-                the form fields need trimming — the progress bar alone won't carry users past bad UX.
-              </li>
-              <li>
-                <strong>Time-to-first-workout:</strong> Measure whether Variant A's higher onboarding
-                completion actually translates to a first logged workout within 48 hours. Completion
-                without activation is a vanity metric.
-              </li>
-              <li>
-                <strong>Day-7 retention by variant:</strong> The real test. If Variant A users churn at
-                the same rate by day 7, the onboarding improvement is cosmetic — you've delayed the drop,
-                not prevented it.
+              <li v-for="(item, i) in (prediction.watch_items || [])" :key="i">
+                {{ item }}
               </li>
             </ol>
           </div>
@@ -262,16 +259,9 @@
 
         <!-- ═══════ Section 7: Recommended Modification ═══════ -->
         <section class="r-section">
-          <h2 class="r-section-title">Recommended Modification to Variant A</h2>
+          <h2 class="r-section-title">Recommended Modification</h2>
           <div class="r-recommendation">
-            <p>
-              Add an estimated time remaining label at the top of each step (e.g., "About 2 min left").
-              Our simulation showed that even users who committed to the 4-step flow experienced micro-hesitations
-              at step 3 ("Goals"), where the questions became more personal. An explicit time anchor reduces
-              this friction by 40% in our model. Additionally, consider making the "Goals" step optional with
-              smart defaults — pre-fill based on the age and activity level captured in step 2, and let users
-              edit later from their profile.
-            </p>
+            <p>{{ prediction.recommended_mod }}</p>
           </div>
         </section>
 
@@ -329,22 +319,35 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 const props = defineProps({
   id: { type: String, required: true }
 })
+
+const router = useRouter()
+
+// ─── Loading state ──────────────────────────────────────────────────────────────
+const loading = ref(true)
+const loadError = ref(null)
+const prediction = ref(null)
+const experiment = ref(null)
+const signals = ref(null)
 
 // ─── Copy Summary ──────────────────────────────────────────────────────────────
 
 const copyLabel = ref('Copy summary')
 
 function copySummary() {
-  const text = `VERDICT: Variant A is predicted to win (HIGH confidence)
+  if (!prediction.value) return
+  const p = prediction.value
+  const text = `VERDICT: Variant ${p.winner?.toUpperCase()} is predicted to win (${(p.confidence || '').toUpperCase()} confidence)
 
-Guided onboarding reduces abandonment by removing the "how long will this take?" hesitation at step 1. Users who see a progress indicator commit earlier and complete setup at nearly double the rate.
+${p.confidence_rationale || ''}
 
-WHY A WINS: Variant A's progress indicator creates a completion contract: once users see "Step 1 of 4," they mentally commit to the sequence. This anchoring effect reduces the cognitive overhead of deciding whether to continue at each screen. The guided flow also front-loads lightweight questions (name, age), building momentum before asking for the harder commitment (goals, plan selection). Variant B's open-ended form triggers decision fatigue in the first 30 seconds.`
+WHY ${p.winner?.toUpperCase()} WINS: ${p.mechanism || ''}`
 
   navigator.clipboard.writeText(text).then(() => {
     copyLabel.value = 'Copied!'
@@ -353,12 +356,10 @@ WHY A WINS: Variant A's progress indicator creates a completion contract: once u
 }
 
 function shareReport() {
+  const p = prediction.value
+  const title = p ? `Prelude Prediction: Variant ${p.winner?.toUpperCase()} wins` : 'Prelude Prediction'
   if (navigator.share) {
-    navigator.share({
-      title: 'Prelude Prediction: Variant A wins',
-      text: 'Guided onboarding reduces abandonment by removing the "how long will this take?" hesitation.',
-      url: window.location.href
-    })
+    navigator.share({ title, text: p?.confidence_rationale || '', url: window.location.href })
   } else {
     navigator.clipboard.writeText(window.location.href).then(() => {
       alert('Link copied to clipboard')
@@ -370,72 +371,36 @@ function shareReport() {
 
 const expandedSegment = ref(null)
 
-const segments = [
-  {
-    name: 'Decision Deferrer',
-    pct: 31,
-    pref: 'Strongly prefers A',
-    narrative: 'Decision Deferrers are paralyzed by open-ended choices. The 4-step guided flow removes ambiguity about what to do next. They reported feeling "relieved" when they saw a clear numbered sequence instead of a blank form.',
-    quote: 'I almost closed the app, but then I saw it was only 4 steps. That felt doable.'
-  },
-  {
-    name: 'Passive Subscriber',
-    pct: 24,
-    pref: 'Prefers A',
-    narrative: 'Passive Subscribers have low motivation and need external structure. Variant A\'s step-by-step flow acts as a gentle nudge system, keeping them moving forward without requiring self-direction.',
-    quote: 'I liked that it told me what to do next. I didn\'t have to think about it.'
-  },
-  {
-    name: 'Complexity Avoider',
-    pct: 18,
-    pref: 'Slightly prefers A',
-    narrative: 'Complexity Avoiders scan for signs of effort before committing. The progress bar in Variant A signals a bounded, manageable experience. Variant B\'s single long form triggered their "this looks like work" reflex.',
-    quote: 'Four steps? Fine. But if I\'d seen all those fields at once, I would have noped out.'
-  },
-  {
-    name: 'One-Click Converter',
-    pct: 12,
-    pref: 'Neutral',
-    narrative: 'One-Click Converters care about speed above all. Both variants felt roughly equivalent — Variant A had more screens but less per screen, while Variant B had one screen but more density. A slight edge to A for perceived simplicity.',
-    quote: 'Just let me start working out. I don\'t care how you ask the questions.'
-  },
-  {
-    name: 'Early Adopter',
-    pct: 8,
-    pref: 'Prefers B',
-    narrative: 'Early Adopters are confident and want control. The guided flow felt slow and unnecessary. They preferred Variant B\'s single form where they could fill everything at their own pace and skip what they didn\'t care about.',
-    quote: 'The step-by-step thing felt like a children\'s app. Just give me the form.'
-  },
-  {
-    name: 'Brand Loyalist',
-    pct: 4,
-    pref: 'Neutral',
-    narrative: 'Brand Loyalists are already committed to the product. Onboarding friction barely registers because their motivation is high enough to push through either variant. They completed both flows at similar rates.',
-    quote: 'I heard about this app from a friend. I was going to finish setup no matter what.'
-  },
-  {
-    name: 'Skeptic',
-    pct: 3,
-    pref: 'Prefers B',
-    narrative: 'Skeptics distrust structured flows because they feel manipulated. The progress bar in Variant A triggered suspicion ("what are they collecting and why?"). Variant B\'s transparency — showing everything upfront — felt more honest.',
-    quote: 'When apps break things into steps, I always wonder what they\'re hiding in step 4.'
-  }
-]
+const segments = computed(() => {
+  if (!prediction.value?.segment_story) return []
+  const story = prediction.value.segment_story
+  return (Array.isArray(story) ? story : []).map(seg => ({
+    name: (seg.persona || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    pct: seg.pct || 0,
+    pref: (seg.preference || 'neutral').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    narrative: seg.narrative || '',
+    quote: seg.quote || '',
+  }))
+})
 
 function prefClass(pref) {
-  if (pref.includes('Strongly prefers A') || pref.includes('Prefers A')) return 'r-pref-a'
-  if (pref.includes('Prefers B')) return 'r-pref-b'
+  const lower = pref.toLowerCase()
+  if (lower.includes('a')) return 'r-pref-a'
+  if (lower.includes('b')) return 'r-pref-b'
   return 'r-pref-neutral'
 }
 
 // ─── Friction Heatmap ──────────────────────────────────────────────────────────
 
-const frictionSteps = [
-  { label: 'First Screen', a: 15, b: 22 },
-  { label: 'About You',    a: 28, b: 84 },
-  { label: 'Goals',        a: 35, b: 45 },
-  { label: 'Plan Setup',   a: 20, b: 38 }
-]
+const frictionSteps = computed(() => {
+  if (!signals.value?.friction_heatmap) return []
+  const heatmap = signals.value.friction_heatmap
+  return (Array.isArray(heatmap) ? heatmap : []).map(s => ({
+    label: (s.step || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    a: Math.round((s.a_friction || 0) * 100),
+    b: Math.round((s.b_friction || 0) * 100),
+  }))
+})
 
 function frictionColor(val) {
   if (val <= 25) return '#4AE89A'
@@ -445,34 +410,40 @@ function frictionColor(val) {
 
 // ─── Sentiment Arc ─────────────────────────────────────────────────────────────
 
-const journeySteps = ['First Screen', 'About You', 'Goals', 'Plan Setup']
+const journeySteps = computed(() => {
+  if (!signals.value?.friction_heatmap) return []
+  return signals.value.friction_heatmap.map(s =>
+    (s.step || '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  )
+})
 
-const sentimentA = [0.3, 0.6, 0.7, 0.8]
-const sentimentB = [0.3, 0.4, -0.1, 0.3]
+const sentimentA = computed(() => signals.value?.sentiment_arc?.a || [])
+const sentimentB = computed(() => signals.value?.sentiment_arc?.b || [])
 
 function sentToY(val) {
-  // Range: -0.5 to 1.0, mapped to 150 (bottom) to 0 (top)
   return 150 - ((val + 0.5) / 1.5) * 150
 }
 
-function sentToX(i) {
-  return 37.5 + i * 75
+function sentToX(i, total) {
+  const count = total || 4
+  const spacing = 300 / (count + 1)
+  return spacing * (i + 1)
 }
 
 const sentimentPointsA = computed(() =>
-  sentimentA.map((v, i) => `${sentToX(i)},${sentToY(v)}`).join(' ')
+  sentimentA.value.map((v, i) => `${sentToX(i, sentimentA.value.length)},${sentToY(v)}`).join(' ')
 )
 const sentimentPointsB = computed(() =>
-  sentimentB.map((v, i) => `${sentToX(i)},${sentToY(v)}`).join(' ')
+  sentimentB.value.map((v, i) => `${sentToX(i, sentimentB.value.length)},${sentToY(v)}`).join(' ')
 )
 const sentimentDotsA = computed(() =>
-  sentimentA.map((v, i) => ({ x: sentToX(i), y: sentToY(v) }))
+  sentimentA.value.map((v, i) => ({ x: sentToX(i, sentimentA.value.length), y: sentToY(v) }))
 )
 const sentimentDotsB = computed(() =>
-  sentimentB.map((v, i) => ({ x: sentToX(i), y: sentToY(v) }))
+  sentimentB.value.map((v, i) => ({ x: sentToX(i, sentimentB.value.length), y: sentToY(v) }))
 )
 
-// ─── Agent Stories ─────────────────────────────────────────────────────────────
+// ─── Agent Stories (from top quotes) ──────────────────────────────────────────
 
 const clusterColors = {
   value_driven: '#F0A843',
@@ -483,53 +454,17 @@ const clusterColors = {
   resistance: '#F05858'
 }
 
-const agentStories = [
-  {
-    name: 'Maya, 28',
+const agentStories = computed(() => {
+  if (!signals.value?.top_quotes) return []
+  return signals.value.top_quotes.slice(0, 5).map(q => ({
+    name: q.agent || 'Agent',
     blend: [
-      { label: 'Convenience', color: clusterColors.convenience_driven },
-      { label: 'Decision Deferrer', color: clusterColors.situational }
+      { label: `Variant ${(q.variant || 'a').toUpperCase()}`, color: q.variant === 'b' ? '#F07858' : '#4AE89A' }
     ],
-    story: 'Maya opened the app on her lunch break with 8 minutes to spare. When she saw the progress bar showing "Step 1 of 4," she figured she could knock it out before getting back to work. She breezed through the first two steps but paused at Goals — she wasn\'t sure whether to pick "lose weight" or "build strength." The progress bar reminded her she was almost done, so she picked one and moved on. She logged her first workout that evening.',
-    outcome: 'Completed'
-  },
-  {
-    name: 'Jordan, 34',
-    blend: [
-      { label: 'Trust', color: clusterColors.trust_driven },
-      { label: 'Skeptic', color: clusterColors.resistance }
-    ],
-    story: 'Jordan was referred by a coworker but had been burned by fitness apps before. In Variant B, he appreciated seeing all the fields upfront — no hidden steps, no surprises. He filled out what he wanted and skipped the rest. He didn\'t love the experience, but he didn\'t distrust it either. He completed setup but hasn\'t opened the app since.',
-    outcome: 'Completed (low engagement)'
-  },
-  {
-    name: 'Priya, 22',
-    blend: [
-      { label: 'Identity', color: clusterColors.identity_driven },
-      { label: 'Early Adopter', color: clusterColors.value_driven }
-    ],
-    story: 'Priya downloads every new fitness app the week it launches. She found Variant A\'s guided flow tedious — she already knew her goals, her weight, her preferred workout time. She wanted to skip to the good stuff. By step 3, she was tapping "next" without reading. She completed setup but felt the app was designed for beginners, not for her.',
-    outcome: 'Completed (at risk)'
-  },
-  {
-    name: 'Marcus, 41',
-    blend: [
-      { label: 'Value', color: clusterColors.value_driven },
-      { label: 'Passive', color: clusterColors.convenience_driven }
-    ],
-    story: 'Marcus got the app because his doctor told him to exercise more. He opened it at 10pm, half-watching TV. Variant A\'s simple first step (just his name) got him started before he could talk himself out of it. Each subsequent step asked for one more thing. By step 4, he\'d built enough momentum to finish. He set a reminder for tomorrow morning.',
-    outcome: 'Completed'
-  },
-  {
-    name: 'Sam, 19',
-    blend: [
-      { label: 'Situational', color: clusterColors.situational },
-      { label: 'Complexity Avoider', color: clusterColors.resistance }
-    ],
-    story: 'Sam saw an Instagram ad and impulsively downloaded the app. In Variant B, the long form hit them like a wall of text. They scrolled down, saw how many fields there were, and closed the app. They never came back. In the simulation with Variant A, Sam completed 3 of 4 steps before getting distracted — but the app saved their progress, and they finished the next day.',
-    outcome: 'Abandoned (B) / Completed (A)'
-  }
-]
+    story: q.content || '',
+    outcome: q.sentiment > 0.3 ? 'Positive' : q.sentiment < -0.3 ? 'Negative' : 'Neutral',
+  }))
+})
 
 // ─── Calibration ───────────────────────────────────────────────────────────────
 
@@ -547,10 +482,69 @@ const canSaveCalibration = computed(() => {
   return true
 })
 
-function saveCalibration() {
-  calibrationSaved.value = true
-  setTimeout(() => { calibrationSaved.value = false }, 3000)
+async function saveCalibration() {
+  try {
+    await axios.post(`/api/prelude/experiments/${props.id}/calibration`, {
+      predicted_winner: prediction.value?.winner || 'unknown',
+      actual_winner: calibration.winner || 'inconclusive',
+      direction_correct: prediction.value?.winner === calibration.winner,
+      segment_correct: true,  // simplified for now
+      friction_correct: true,
+      notes: calibration.notes,
+    })
+    calibrationSaved.value = true
+    setTimeout(() => { calibrationSaved.value = false }, 3000)
+  } catch (e) {
+    alert('Failed to save calibration: ' + (e.response?.data?.error || e.message))
+  }
 }
+
+// ─── Data loading ─────────────────────────────────────────────────────────────
+
+async function loadPrediction() {
+  loading.value = true
+  loadError.value = null
+  try {
+    // Load experiment info
+    const { data: expData } = await axios.get(`/api/prelude/experiments/${props.id}`)
+    experiment.value = expData
+
+    // Try to get existing prediction
+    try {
+      const { data: predData } = await axios.get(`/api/prelude/experiments/${props.id}/prediction`)
+      prediction.value = predData
+    } catch (e) {
+      if (e.response?.status === 404) {
+        // Generate prediction if it doesn't exist
+        const { data: predData } = await axios.post(`/api/prelude/experiments/${props.id}/predict`)
+        prediction.value = predData
+      } else {
+        throw e
+      }
+    }
+
+    // Load run signals
+    const { data: runData } = await axios.get(`/api/prelude/experiments/${props.id}/simulation/runs`)
+    if (runData.signals) {
+      signals.value = runData.signals
+      // Parse JSONB fields if they're strings
+      for (const field of ['adoption_by_segment', 'friction_heatmap', 'sentiment_arc', 'top_quotes', 'behavioral_patterns']) {
+        if (typeof signals.value[field] === 'string') {
+          signals.value[field] = JSON.parse(signals.value[field])
+        }
+      }
+    }
+
+  } catch (e) {
+    loadError.value = e.response?.data?.error || e.message || 'Failed to load prediction'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadPrediction()
+})
 </script>
 
 <style scoped>
@@ -607,6 +601,37 @@ function saveCalibration() {
 .p-nav-icon {
   font-size: 13px;
   opacity: 0.7;
+}
+
+/* ─── Loading / Error ────────────────────────────────────────────────────────── */
+.r-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  color: #8A9490;
+  font-size: 15px;
+  padding: 80px 0;
+}
+.r-loading-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #1E2421;
+  border-top-color: #4AE89A;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.r-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 0;
+  color: #F05858;
+  font-size: 14px;
 }
 
 /* ─── Main ───────────────────────────────────────────────────────────────────── */
