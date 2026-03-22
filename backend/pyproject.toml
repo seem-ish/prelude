@@ -32,6 +32,10 @@ dependencies = [
     # 工具库
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
+
+    # Prelude additions
+    "anthropic>=0.40.0",
+    "psycopg2-binary>=2.9.0",
 ]
 
 [project.optional-dependencies]
