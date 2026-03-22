@@ -17,7 +17,7 @@
     <main class="p-main">
       <!-- Top bar with back link and progress -->
       <div class="p-topbar-row">
-        <button class="p-back-btn" @click="$router.back()">← Back</button>
+        <button class="p-back-btn" @click="goBack">← {{ mode === 'build' ? 'Brief' : 'Back' }}</button>
         <div class="p-progress-bar">
           <div class="p-progress-step done"><span class="p-progress-dot"></span><span class="p-progress-label">Brief</span></div>
           <div class="p-progress-step active"><span class="p-progress-dot"></span><span class="p-progress-label">Personas</span></div>
@@ -26,70 +26,147 @@
         </div>
       </div>
 
-      <h1 class="p-page-title">Who could react to your feature?</h1>
-      <p class="p-page-sub">40 persona archetypes across 6 behavioral clusters. Filter, search, and explore.</p>
+      <!-- ═══════ BUILD MODE ═══════ -->
+      <template v-if="mode === 'build'">
+        <h1 class="p-page-title">Who will react to your feature?</h1>
+        <p class="p-page-sub">We've suggested a starting population. Adjust as needed.</p>
 
-      <!-- Filters -->
-      <div class="p-filters">
-        <button
-          v-for="f in filterOptions"
-          :key="f.value"
-          class="p-filter-btn"
-          :class="{ active: activeCluster === f.value }"
-          :style="activeCluster === f.value ? { background: f.color + '22', color: f.color, borderColor: f.color + '44' } : {}"
-          @click="activeCluster = activeCluster === f.value ? null : f.value"
-        >{{ f.label }}</button>
-        <div class="p-search-wrap">
-          <input
-            v-model="searchQuery"
-            class="p-search"
-            placeholder="Search personas..."
-            type="text"
-          />
+        <!-- Mode toggle -->
+        <div class="p-mode-toggle">
+          <button class="p-mode-btn active">Build</button>
+          <button class="p-mode-btn" @click="mode = 'browse'">Browse All</button>
         </div>
-      </div>
 
-      <!-- Persona grid -->
-      <div class="p-persona-grid">
-        <div
-          v-for="p in filteredPersonas"
-          :key="p.slug"
-          class="p-persona-card"
-          :class="{ selected: selectedPersona?.slug === p.slug }"
-          @click="selectedPersona = p"
-        >
-          <div class="p-persona-top">
-            <span class="p-cluster-badge" :style="{ background: clusterColor(p.cluster) + '22', color: clusterColor(p.cluster) }">
-              {{ clusterLabel(p.cluster) }}
-            </span>
+        <!-- Loading state -->
+        <div v-if="buildLoading" class="p-build-loading">
+          Analyzing your brief and selecting personas...
+        </div>
+
+        <!-- Population list -->
+        <div v-else class="p-build-section">
+          <div class="p-build-header">
+            <span class="p-build-count">SUGGESTED ({{ population.length }} of 40 personas)</span>
+            <span class="p-build-agents">Total: {{ agentCount }} agents</span>
           </div>
-          <h3 class="p-persona-name">{{ p.name }}</h3>
-          <p class="p-persona-short">{{ p.short_desc }}</p>
-          <!-- Top 3 traits as mini bars -->
-          <div class="p-trait-bars">
-            <div v-for="t in topTraits(p)" :key="t.name" class="p-trait-row">
-              <span class="p-trait-label">{{ t.name }}</span>
-              <div class="p-trait-track">
-                <div class="p-trait-fill" :style="{ width: (t.value * 100) + '%', background: clusterColor(p.cluster) }"></div>
+
+          <div class="p-population-list">
+            <div
+              v-for="(p, idx) in population"
+              :key="p.slug"
+              class="p-pop-row"
+            >
+              <span class="p-pop-dot">●</span>
+              <span class="p-pop-name" @click="openPersonaDetail(p.slug)">{{ p.name }}</span>
+              <span class="p-cluster-badge p-cluster-badge--sm" :style="{ background: clusterColor(p.cluster) + '22', color: clusterColor(p.cluster) }">
+                {{ clusterLabel(p.cluster) }}
+              </span>
+              <div class="p-weight-slider-wrap">
+                <input
+                  type="range"
+                  class="p-weight-slider"
+                  min="1"
+                  max="100"
+                  :value="Math.round(p.weight * 100)"
+                  @input="onWeightChange(idx, $event)"
+                />
               </div>
+              <span class="p-pop-weight">{{ Math.round(p.weight * 100) }}%</span>
+              <button class="p-pop-remove" @click="removePersona(idx)" title="Remove">✕</button>
             </div>
           </div>
-          <!-- Motivation & fear -->
-          <div class="p-persona-hints">
-            <div class="p-hint"><span class="p-hint-icon">↑</span>{{ p.motivations[0] }}</div>
-            <div class="p-hint"><span class="p-hint-icon">↓</span>{{ p.fears[0] }}</div>
+
+          <!-- Actions -->
+          <div class="p-build-actions">
+            <button class="p-btn-secondary" @click="showAddPersona = true">+ Add persona</button>
+            <button class="p-btn-secondary" @click="regenerateSuggestion">Regenerate suggestion</button>
+          </div>
+
+          <!-- Hybrid blending info -->
+          <div class="p-blend-info">
+            <p>Hybrid blending: each agent blends 2-3 personas</p>
+            <button class="p-btn-secondary" @click="previewSampleAgent">Preview a sample agent</button>
+          </div>
+
+          <!-- Run Simulation CTA -->
+          <button class="p-btn-primary p-run-btn" @click="runSimulation" :disabled="building">
+            {{ building ? 'Building agents...' : 'Run Simulation →' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- ═══════ BROWSE MODE ═══════ -->
+      <template v-else>
+        <h1 class="p-page-title">Who could react to your feature?</h1>
+        <p class="p-page-sub">40 persona archetypes across 6 behavioral clusters. Filter, search, and explore.</p>
+
+        <!-- Mode toggle (only show if we have an experiment) -->
+        <div v-if="id" class="p-mode-toggle">
+          <button class="p-mode-btn" @click="mode = 'build'">Build</button>
+          <button class="p-mode-btn active">Browse All</button>
+        </div>
+
+        <!-- Filters -->
+        <div class="p-filters">
+          <button
+            v-for="f in filterOptions"
+            :key="f.value"
+            class="p-filter-btn"
+            :class="{ active: activeCluster === f.value }"
+            :style="activeCluster === f.value ? { background: f.color + '22', color: f.color, borderColor: f.color + '44' } : {}"
+            @click="activeCluster = activeCluster === f.value ? null : f.value"
+          >{{ f.label }}</button>
+          <div class="p-search-wrap">
+            <input
+              v-model="searchQuery"
+              class="p-search"
+              placeholder="Search personas..."
+              type="text"
+            />
           </div>
         </div>
 
-        <!-- Empty state -->
-        <div v-if="filteredPersonas.length === 0" class="p-empty-personas">
-          No personas match your search.
+        <!-- Persona grid -->
+        <div class="p-persona-grid">
+          <div
+            v-for="p in filteredPersonas"
+            :key="p.slug"
+            class="p-persona-card"
+            :class="{ selected: selectedPersona?.slug === p.slug }"
+            @click="selectedPersona = p"
+          >
+            <div class="p-persona-top">
+              <span class="p-cluster-badge" :style="{ background: clusterColor(p.cluster) + '22', color: clusterColor(p.cluster) }">
+                {{ clusterLabel(p.cluster) }}
+              </span>
+            </div>
+            <h3 class="p-persona-name">{{ p.name }}</h3>
+            <p class="p-persona-short">{{ p.short_desc }}</p>
+            <!-- Top 3 traits as mini bars -->
+            <div class="p-trait-bars">
+              <div v-for="t in topTraits(p)" :key="t.name" class="p-trait-row">
+                <span class="p-trait-label">{{ t.name }}</span>
+                <div class="p-trait-track">
+                  <div class="p-trait-fill" :style="{ width: (t.value * 100) + '%', background: clusterColor(p.cluster) }"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Motivation & fear -->
+            <div class="p-persona-hints">
+              <div class="p-hint"><span class="p-hint-icon">↑</span>{{ p.motivations[0] }}</div>
+              <div class="p-hint"><span class="p-hint-icon">↓</span>{{ p.fears[0] }}</div>
+            </div>
+          </div>
+
+          <!-- Empty state -->
+          <div v-if="filteredPersonas.length === 0" class="p-empty-personas">
+            No personas match your search.
+          </div>
         </div>
-      </div>
+      </template>
 
     </main>
 
-    <!-- Detail panel — teleported to body to escape scroll stacking context -->
+    <!-- Detail panel — teleported to escape scroll stacking context -->
     <Teleport to="#app">
       <transition name="panel-slide">
         <div v-if="selectedPersona" class="p-detail-backdrop" @click="selectedPersona = null"></div>
@@ -175,15 +252,99 @@
                 </div>
               </div>
             </div>
+
+            <!-- Add to population button (in browse mode with experiment) -->
+            <button
+              v-if="mode === 'browse' && id && !isInPopulation(selectedPersona.slug)"
+              class="p-btn-primary p-add-to-pop"
+              @click="addToPopulation(selectedPersona); selectedPersona = null"
+            >
+              + Add to Population
+            </button>
           </div>
         </transition>
+
+      <!-- Add persona picker modal -->
+      <transition name="panel-slide">
+        <div v-if="showAddPersona" class="p-detail-backdrop" @click="showAddPersona = false"></div>
+      </transition>
+      <transition name="panel-slide">
+        <div v-if="showAddPersona" class="p-detail-panel p-add-panel">
+          <div class="p-detail-header">
+            <h2 class="p-detail-name">Add Persona</h2>
+            <button class="p-detail-close" @click="showAddPersona = false">✕</button>
+          </div>
+          <input
+            v-model="addSearchQuery"
+            class="p-search p-add-search"
+            placeholder="Search personas to add..."
+            type="text"
+          />
+          <div class="p-add-list">
+            <div
+              v-for="p in addablePersonas"
+              :key="p.slug"
+              class="p-add-item"
+              @click="addToPopulation(p); showAddPersona = false"
+            >
+              <span class="p-cluster-badge p-cluster-badge--sm" :style="{ background: clusterColor(p.cluster) + '22', color: clusterColor(p.cluster) }">
+                {{ clusterLabel(p.cluster) }}
+              </span>
+              <span class="p-add-item-name">{{ p.name }}</span>
+              <span class="p-add-item-desc">{{ p.short_desc }}</span>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Sample agent preview modal -->
+      <transition name="panel-slide">
+        <div v-if="sampleAgent" class="p-detail-backdrop" @click="sampleAgent = null"></div>
+      </transition>
+      <transition name="panel-slide">
+        <div v-if="sampleAgent" class="p-detail-panel p-sample-panel">
+          <div class="p-detail-header">
+            <h2 class="p-detail-name">Sample Agent: {{ sampleAgent.name }}</h2>
+            <button class="p-detail-close" @click="sampleAgent = null">✕</button>
+          </div>
+
+          <div class="p-sample-blend">
+            <div v-for="(comp, i) in sampleAgent.persona_blend" :key="comp.slug" class="p-sample-comp">
+              <span class="p-sample-role">{{ i === 0 ? 'Primary' : i === 1 ? 'Secondary' : 'Tertiary' }}:</span>
+              <span class="p-sample-persona">{{ personaNameBySlug(comp.slug) }}</span>
+              <span class="p-sample-pct">{{ Math.round(comp.influence * 100) }}%</span>
+            </div>
+          </div>
+
+          <div class="p-detail-quote">"{{ sampleAgent.backstory }}"</div>
+
+          <div class="p-detail-section">
+            <h4 class="p-detail-section-title">Blended Traits</h4>
+            <div class="p-trait-bars p-trait-bars--full">
+              <div v-for="(val, key) in sampleAgent.traits" :key="key" class="p-trait-row">
+                <span class="p-trait-label">{{ formatTrait(key) }}</span>
+                <div class="p-trait-track">
+                  <div class="p-trait-fill" :style="{ width: (val * 100) + '%', background: '#4AE89A' }"></div>
+                </div>
+                <span class="p-trait-val">{{ Math.round(val * 100) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <button class="p-btn-secondary p-gen-another" @click="previewSampleAgent">Generate another</button>
+        </div>
+      </transition>
     </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
+
+const props = defineProps({ id: String })
+const router = useRouter()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const personas = ref([])
@@ -191,6 +352,17 @@ const loading = ref(false)
 const activeCluster = ref(null)
 const searchQuery = ref('')
 const selectedPersona = ref(null)
+
+// Build mode state
+const mode = ref(props.id ? 'build' : 'browse')
+const experiment = ref(null)
+const population = ref([])       // [{slug, name, cluster, weight, relevance_score}, ...]
+const buildLoading = ref(false)
+const building = ref(false)
+const agentCount = ref(200)
+const sampleAgent = ref(null)
+const showAddPersona = ref(false)
+const addSearchQuery = ref('')
 
 // ─── Cluster config ───────────────────────────────────────────────────────────
 const clusterColors = {
@@ -245,6 +417,19 @@ const filteredPersonas = computed(() => {
   return result
 })
 
+const populationSlugs = computed(() => new Set(population.value.map(p => p.slug)))
+
+const addablePersonas = computed(() => {
+  const q = addSearchQuery.value.toLowerCase().trim()
+  return personas.value.filter(p => {
+    if (populationSlugs.value.has(p.slug)) return false
+    if (!q) return true
+    return p.name.toLowerCase().includes(q) ||
+           p.short_desc.toLowerCase().includes(q) ||
+           p.cluster.toLowerCase().includes(q)
+  })
+})
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function clusterColor(c) { return clusterColors[c] || '#5A6460' }
 function clusterLabel(c) { return clusterLabels[c] || c }
@@ -267,7 +452,88 @@ function topTraits(persona) {
   }))
 }
 
-// ─── Load data ────────────────────────────────────────────────────────────────
+function isInPopulation(slug) {
+  return populationSlugs.value.has(slug)
+}
+
+function personaNameBySlug(slug) {
+  const p = personas.value.find(x => x.slug === slug)
+  return p ? p.name : slug
+}
+
+function goBack() {
+  if (mode.value === 'build' && props.id) {
+    router.push(`/prelude/brief/${props.id}`)
+  } else {
+    router.back()
+  }
+}
+
+// ─── Weight management ───────────────────────────────────────────────────────
+function onWeightChange(idx, event) {
+  const newVal = parseInt(event.target.value) / 100
+  population.value[idx].weight = newVal
+  rebalanceWeights(idx)
+}
+
+function rebalanceWeights(changedIdx) {
+  const changed = population.value[changedIdx].weight
+  const others = population.value.filter((_, i) => i !== changedIdx)
+  const remaining = Math.max(0, 1 - changed)
+  const otherTotal = others.reduce((sum, p) => sum + p.weight, 0)
+
+  if (otherTotal > 0) {
+    for (let i = 0; i < population.value.length; i++) {
+      if (i !== changedIdx) {
+        population.value[i].weight = Math.max(0.01, (population.value[i].weight / otherTotal) * remaining)
+      }
+    }
+  }
+  // Normalize to exactly 1.0
+  const total = population.value.reduce((s, p) => s + p.weight, 0)
+  if (total > 0) {
+    population.value.forEach(p => { p.weight = p.weight / total })
+  }
+}
+
+function removePersona(idx) {
+  population.value.splice(idx, 1)
+  if (population.value.length > 0) {
+    const total = population.value.reduce((s, p) => s + p.weight, 0)
+    population.value.forEach(p => { p.weight = p.weight / total })
+  }
+}
+
+function addToPopulation(persona) {
+  if (isInPopulation(persona.slug)) return
+  // Add with small weight, rebalance
+  const newWeight = 0.05
+  const scale = 1 - newWeight
+  population.value.forEach(p => { p.weight *= scale })
+  population.value.push({
+    slug: persona.slug,
+    name: persona.name,
+    cluster: persona.cluster,
+    weight: newWeight,
+    relevance_score: 0,
+  })
+}
+
+function openPersonaDetail(slug) {
+  const p = personas.value.find(x => x.slug === slug)
+  if (p) selectedPersona.value = p
+}
+
+// ─── Build mode weight map ───────────────────────────────────────────────────
+function getWeightMap() {
+  const map = {}
+  for (const p of population.value) {
+    map[p.slug] = p.weight
+  }
+  return map
+}
+
+// ─── API calls ───────────────────────────────────────────────────────────────
 async function loadPersonas() {
   loading.value = true
   try {
@@ -280,7 +546,70 @@ async function loadPersonas() {
   }
 }
 
-onMounted(loadPersonas)
+async function loadExperiment() {
+  if (!props.id) return
+  try {
+    const { data } = await axios.get(`/api/prelude/experiments/${props.id}`)
+    experiment.value = data
+  } catch (e) {
+    console.error('Failed to load experiment:', e)
+  }
+}
+
+async function generateSuggestion() {
+  if (!props.id) return
+  buildLoading.value = true
+  try {
+    const { data } = await axios.post(`/api/prelude/experiments/${props.id}/population/generate`)
+    population.value = data.personas
+  } catch (e) {
+    console.error('Failed to generate population:', e)
+  } finally {
+    buildLoading.value = false
+  }
+}
+
+async function regenerateSuggestion() {
+  await generateSuggestion()
+}
+
+async function previewSampleAgent() {
+  if (population.value.length === 0) return
+  try {
+    const { data } = await axios.post(`/api/prelude/experiments/${props.id}/population/preview-agent`, {
+      persona_weights: getWeightMap(),
+    })
+    sampleAgent.value = data.agent
+  } catch (e) {
+    console.error('Failed to preview agent:', e)
+  }
+}
+
+async function runSimulation() {
+  if (building.value || population.value.length === 0) return
+  building.value = true
+  try {
+    await axios.post(`/api/prelude/experiments/${props.id}/population/build`, {
+      persona_weights: getWeightMap(),
+      agent_count: agentCount.value,
+    })
+    router.push(`/prelude/sim/${props.id}`)
+  } catch (e) {
+    console.error('Failed to build population:', e)
+    alert('Failed to build agents. Is the backend running?')
+  } finally {
+    building.value = false
+  }
+}
+
+// ─── Lifecycle ───────────────────────────────────────────────────────────────
+onMounted(async () => {
+  await loadPersonas()
+  if (props.id) {
+    await loadExperiment()
+    await generateSuggestion()
+  }
+})
 </script>
 
 <style scoped>
@@ -358,6 +687,115 @@ onMounted(loadPersonas)
 }
 .p-page-sub { font-size: 14px; color: #6A7870; margin: 0 0 24px; }
 
+/* ─── Mode toggle ────────────────────────────────────────────────────────── */
+.p-mode-toggle {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: #111413; border-radius: 10px; padding: 4px;
+  width: fit-content;
+}
+.p-mode-btn {
+  background: none; border: none; border-radius: 8px;
+  padding: 7px 18px; font-size: 13px; font-weight: 500; color: #6A7870;
+  cursor: pointer; transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.p-mode-btn.active { background: #1A1F1D; color: #E8EAE9; }
+.p-mode-btn:hover:not(.active) { color: #8A9490; }
+
+/* ─── Build mode ─────────────────────────────────────────────────────────── */
+.p-build-loading {
+  text-align: center; padding: 60px 20px;
+  color: #6A7870; font-size: 14px;
+}
+.p-build-section { max-width: 700px; }
+.p-build-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px;
+}
+.p-build-count {
+  font-size: 11px; font-weight: 700; color: #5A6460;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.p-build-agents {
+  font-size: 13px; color: #8A9490; font-weight: 500;
+}
+
+/* ─── Population list ────────────────────────────────────────────────────── */
+.p-population-list {
+  display: flex; flex-direction: column; gap: 2px;
+  background: #111413; border: 1px solid #1E2421; border-radius: 12px;
+  padding: 8px; margin-bottom: 16px;
+}
+.p-pop-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  transition: background 0.1s;
+}
+.p-pop-row:hover { background: #161A18; }
+.p-pop-dot { color: #4AE89A; font-size: 10px; flex-shrink: 0; }
+.p-pop-name {
+  font-size: 13px; font-weight: 600; color: #E8EAE9;
+  min-width: 140px; cursor: pointer;
+}
+.p-pop-name:hover { color: #4AE89A; }
+.p-cluster-badge--sm {
+  font-size: 9px; font-weight: 700; padding: 2px 7px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.p-weight-slider-wrap { flex: 1; min-width: 80px; }
+.p-weight-slider {
+  width: 100%; height: 4px; -webkit-appearance: none; appearance: none;
+  background: #1E2421; border-radius: 4px; outline: none; cursor: pointer;
+}
+.p-weight-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: #4AE89A; cursor: pointer; border: 2px solid #0D0F0E;
+}
+.p-pop-weight {
+  font-size: 12px; color: #8A9490; width: 36px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.p-pop-remove {
+  background: none; border: none; color: #3A4440; font-size: 12px;
+  cursor: pointer; padding: 2px 4px; transition: color 0.15s;
+}
+.p-pop-remove:hover { color: #F05858; }
+
+/* ─── Build actions ──────────────────────────────────────────────────────── */
+.p-build-actions {
+  display: flex; gap: 10px; margin-bottom: 20px;
+}
+.p-btn-secondary {
+  background: #161A18; border: 1px solid #2E3D37; border-radius: 8px;
+  padding: 8px 16px; font-size: 13px; font-weight: 500; color: #8A9490;
+  cursor: pointer; transition: all 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.p-btn-secondary:hover { border-color: #4AE89A; color: #E8EAE9; }
+
+.p-blend-info {
+  background: #111413; border: 1px solid #1E2421; border-radius: 10px;
+  padding: 16px 20px; margin-bottom: 24px;
+}
+.p-blend-info p {
+  font-size: 13px; color: #6A7870; margin: 0 0 12px;
+}
+
+.p-btn-primary {
+  background: #4AE89A; color: #0D0F0E; border: none; border-radius: 10px;
+  padding: 12px 28px; font-size: 15px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  font-family: 'DM Sans', sans-serif;
+}
+.p-btn-primary:hover { background: #3DD88A; transform: translateY(-1px); }
+.p-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.p-run-btn { width: 100%; }
+
+.p-add-to-pop {
+  width: 100%; margin-top: 16px;
+}
+
 /* ─── Filters ────────────────────────────────────────────────────────────── */
 .p-filters {
   display: flex;
@@ -383,11 +821,6 @@ onMounted(loadPersonas)
 .p-search:focus { border-color: #4AE89A; }
 .p-search::placeholder { color: #4A5450; }
 
-/* ─── Content layout ─────────────────────────────────────────────────────── */
-.p-content {
-  position: relative;
-}
-
 /* ─── Persona grid ───────────────────────────────────────────────────────── */
 .p-persona-grid {
   display: grid;
@@ -396,9 +829,6 @@ onMounted(loadPersonas)
   flex: 1;
   min-width: 0;
   transition: all 0.2s;
-}
-.p-persona-grid.has-detail {
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
 
 .p-persona-card {
@@ -462,7 +892,7 @@ onMounted(loadPersonas)
 .p-main::-webkit-scrollbar-thumb { background: #2E3D37; border-radius: 4px; }
 </style>
 
-<!-- Unscoped styles for teleported detail panel -->
+<!-- Unscoped styles for teleported panels -->
 <style>
 .p-detail-backdrop {
   position: fixed;
@@ -551,4 +981,31 @@ onMounted(loadPersonas)
 .panel-slide-enter-from, .panel-slide-leave-to {
   opacity: 0; transform: translateX(20px);
 }
+
+/* ─── Add persona panel ──────────────────────────────────────────────────── */
+.p-add-panel { width: 420px; }
+.p-add-search { width: 100%; margin-bottom: 16px; box-sizing: border-box; }
+.p-add-list { display: flex; flex-direction: column; gap: 4px; max-height: 400px; overflow-y: auto; }
+.p-add-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  transition: background 0.1s;
+}
+.p-add-item:hover { background: #1A1F1D; }
+.p-add-item-name { font-size: 13px; font-weight: 600; color: #E8EAE9; min-width: 120px; }
+.p-add-item-desc { font-size: 11px; color: #6A7870; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ─── Sample agent preview ───────────────────────────────────────────────── */
+.p-sample-panel { width: 460px; }
+.p-sample-blend {
+  background: #161A18; border-radius: 10px; padding: 14px 16px;
+  margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;
+}
+.p-sample-comp {
+  display: flex; align-items: center; gap: 10px; font-size: 13px;
+}
+.p-sample-role { color: #5A6460; width: 70px; font-weight: 500; }
+.p-sample-persona { color: #E8EAE9; font-weight: 600; flex: 1; }
+.p-sample-pct { color: #4AE89A; font-weight: 600; font-variant-numeric: tabular-nums; }
+.p-gen-another { margin-top: 8px; }
 </style>
