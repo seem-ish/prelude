@@ -69,8 +69,8 @@ def create_app(config_class=Config):
     app.register_blueprint(report_bp, url_prefix='/api/report')
 
     # Prelude module
-    import sys, os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
     from prelude.api import prelude_bp
     app.register_blueprint(prelude_bp, url_prefix='/api/prelude')
     
