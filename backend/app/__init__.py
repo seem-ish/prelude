@@ -73,6 +73,18 @@ def create_app(config_class=Config):
     _sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
     from prelude.api import prelude_bp
     app.register_blueprint(prelude_bp, url_prefix='/api/prelude')
+
+    # Auto-seed Prelude sample data if DB is empty
+    try:
+        from prelude.db import query
+        if not query("SELECT 1 FROM experiments LIMIT 1"):
+            from prelude.seed_sample_data import seed
+            seed()
+            if should_log_startup:
+                logger.info("Prelude: sample data seeded")
+    except Exception as _e:
+        if should_log_startup:
+            logger.warning(f"Prelude: auto-seed skipped ({_e})")
     
     # 健康检查
     @app.route('/health')
