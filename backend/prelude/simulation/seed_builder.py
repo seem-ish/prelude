@@ -39,6 +39,62 @@ JOURNEY_STEPS_BY_CATEGORY = {
         "modification_or_cancel",# Wants to swap items or cancel
     ],
 
+    # ── Ecommerce: Marketplace ─────────────────────────────────────────────
+    "marketplace": [
+        "search_landing",       # Search query or category page — first results
+        "product_comparison",   # Compare listings, sellers, prices, reviews
+        "review_deep_dive",     # Read reviews, check seller ratings, Q&A
+        "add_to_cart",          # Commits intent — considers shipping, Prime, etc.
+        "checkout_decision",    # Payment, shipping speed choice, promo codes
+        "post_purchase",        # Delivery tracking, unbox, review or return decision
+    ],
+    "marketplace_returns": [
+        "return_trigger",       # Wrong size, damaged, not as described
+        "return_process_start", # Find return flow — label, drop-off, pickup
+        "effort_assessment",    # Easy or painful? Packaging, postage, locker
+        "return_completion",    # Actually ships it back
+        "refund_wait",          # Waiting for refund — trust holds or erodes
+        "repurchase_intent",    # Would they buy from this seller/platform again?
+    ],
+
+    # ── Ecommerce: Food Delivery ───────────────────────────────────────────
+    "food_delivery": [
+        "app_open_craving",     # Opens app — hungry, browsing, or habitual?
+        "restaurant_browse",    # Scroll restaurants, filter, promoted listings
+        "menu_selection",       # Pick items — customization, add-ons, pricing
+        "cart_review",          # See total with fees, delivery charge, tip
+        "order_tracking",       # Waiting — ETA updates, driver location
+        "delivery_experience",  # Food arrives — quality, speed, accuracy
+    ],
+    "food_delivery_subscription": [
+        "subscription_pitch",   # DashPass / Uber One / Grubhub+ offer
+        "value_calculation",    # Will I order enough to justify the monthly fee?
+        "signup_commitment",    # Enter payment — monthly or annual?
+        "first_subsidized_order",# First order with free delivery — feels great
+        "habit_or_guilt",       # Am I ordering too much? Or not enough to justify?
+        "renewal_or_cancel",    # Monthly renewal — keep or cut?
+    ],
+
+    # ── Ecommerce: Quick Commerce ──────────────────────────────────────────
+    "quick_commerce": [
+        "impulse_trigger",      # Need something NOW — convenience craving
+        "catalog_scan",         # Browse limited catalog — is my item here?
+        "price_markup_reaction",# Notice higher prices vs grocery store
+        "minimum_order_pad",    # Need to add items to hit delivery minimum
+        "checkout_speed",       # One-tap checkout, saved payment, address
+        "delivery_satisfaction",# 15-30 min delivery — did it meet the promise?
+    ],
+
+    # ── Ecommerce: Online Grocery ──────────────────────────────────────────
+    "online_grocery": [
+        "list_import",          # Start from list, past orders, or browse fresh
+        "product_selection",    # Pick items — substitution preferences, organic vs regular
+        "basket_review",        # Review full basket — budget check, forgotten items
+        "delivery_slot_choice", # Pick time window — availability, urgency, cost
+        "checkout_payment",     # Pay — tip, promo codes, membership discount
+        "delivery_receipt",     # Receive order — substitutions, freshness, missing items
+    ],
+
     # ── Retail: Fashion ──────────────────────────────────────────────────────
     "fashion": [
         "discovery",            # Ad, influencer, browse — sees the product
@@ -48,25 +104,18 @@ JOURNEY_STEPS_BY_CATEGORY = {
         "checkout_friction",    # Shipping cost reveal, payment entry, promo code hunt
         "post_purchase",        # Delivery wait, unbox, keep-or-return decision
     ],
-    "fashion_launch": [
-        "teaser_awareness",     # Email, social — new collection is coming
-        "early_access_offer",   # VIP / waitlist / early-bird pitch
-        "collection_browse",    # Landing page with new pieces
-        "desire_vs_budget",     # Wants it but price is high — justify or defer?
-        "purchase_trigger",     # Limited stock, social proof, or discount tips the scale
-        "post_purchase_share",  # Wears it, photographs it, reviews it
-    ],
-    "fashion_returns": [
-        "return_trigger",       # Doesn't fit, wrong color, changed mind
-        "return_process_start", # Finds the return flow — label, QR, drop-off
-        "effort_assessment",    # Is this easy or annoying? Packaging, postage
-        "return_completion",    # Actually ships it back
-        "refund_wait",          # Waiting for money back — trust erodes or holds
-        "repurchase_intent",    # Would they buy again knowing the return experience?
-    ],
 
     # ── Retail (generic) ─────────────────────────────────────────────────────
     "retail": [
+        "discovery",
+        "product_evaluation",
+        "cart_decision",
+        "checkout",
+        "post_purchase",
+    ],
+
+    # ── Ecommerce (generic catch-all) ────────────────────────────────────────
+    "ecommerce": [
         "discovery",
         "product_evaluation",
         "cart_decision",

@@ -231,7 +231,97 @@
           </div>
         </section>
 
-        <!-- ═══════ Section 6: Mechanism + Risk + Watch ═══════ -->
+        <!-- ═══════ Section 6: Voice of Customer (v1) ═══════ -->
+        <section v-if="voc && voc.highlight_quotes && voc.highlight_quotes.length" class="r-section">
+          <h2 class="r-section-title">
+            Voice of Customer
+            <span class="r-voc-badge">v1 — LLM-driven</span>
+          </h2>
+
+          <!-- Highlight quotes -->
+          <div class="r-voc-highlights">
+            <div
+              v-for="(q, i) in voc.highlight_quotes.slice(0, 6)"
+              :key="i"
+              class="r-voc-quote-card"
+              :class="q.sentiment > 0.2 ? 'r-voc-positive' : q.sentiment < -0.2 ? 'r-voc-negative' : 'r-voc-neutral'"
+            >
+              <div class="r-voc-quote-top">
+                <span class="r-voc-agent">{{ q.agent }}</span>
+                <span class="r-voc-variant" :class="'r-voc-variant-' + q.variant">{{ q.variant?.toUpperCase() }}</span>
+              </div>
+              <blockquote class="r-voc-text">"{{ q.quote }}"</blockquote>
+              <div class="r-voc-meta">
+                <span class="r-voc-step">{{ (q.step || '').replace(/_/g, ' ') }}</span>
+                <span class="r-voc-sentiment" :class="q.sentiment > 0 ? 'r-voc-sent-pos' : 'r-voc-sent-neg'">
+                  {{ q.sentiment > 0 ? '+' : '' }}{{ q.sentiment?.toFixed(2) }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Segment preference summary -->
+          <div v-if="voc.summary" class="r-voc-summary">
+            <div class="r-voc-summary-stat">
+              <span class="r-voc-summary-num">{{ voc.summary.segments_preferring_a }}</span>
+              <span class="r-voc-summary-label">segments prefer A</span>
+            </div>
+            <div class="r-voc-summary-stat">
+              <span class="r-voc-summary-num">{{ voc.summary.segments_preferring_b }}</span>
+              <span class="r-voc-summary-label">segments prefer B</span>
+            </div>
+            <div class="r-voc-summary-stat">
+              <span class="r-voc-summary-num">{{ voc.summary.total_quotes_a + voc.summary.total_quotes_b }}</span>
+              <span class="r-voc-summary-label">total VoC quotes</span>
+            </div>
+          </div>
+
+          <!-- Segment-level VoC (expandable) -->
+          <div class="r-voc-segments">
+            <div
+              v-for="(seg, key) in voc.by_segment"
+              :key="key"
+              class="r-voc-seg-row"
+              :class="{ expanded: expandedVocSeg === key }"
+              @click="expandedVocSeg = expandedVocSeg === key ? null : key"
+            >
+              <div class="r-voc-seg-header">
+                <span class="r-voc-seg-name">{{ seg.name }}</span>
+                <span class="r-voc-seg-pref" :class="'r-voc-pref-' + seg.preference">
+                  {{ seg.preference === 'a' ? 'Prefers A' : seg.preference === 'b' ? 'Prefers B' : 'Split' }}
+                </span>
+                <span class="r-voc-seg-scores">
+                  A: {{ seg.avg_sentiment_a?.toFixed(2) }} / B: {{ seg.avg_sentiment_b?.toFixed(2) }}
+                </span>
+                <span class="r-voc-seg-chevron">{{ expandedVocSeg === key ? '−' : '+' }}</span>
+              </div>
+              <transition name="expand">
+                <div v-if="expandedVocSeg === key" class="r-voc-seg-detail">
+                  <div class="r-voc-seg-cols">
+                    <div class="r-voc-seg-col">
+                      <h4 class="r-voc-col-title">Variant A</h4>
+                      <blockquote
+                        v-for="(q, qi) in (seg.quotes_a || []).slice(0, 3)"
+                        :key="'a'+qi"
+                        class="r-voc-seg-quote"
+                      >"{{ q.quote }}" <span class="r-voc-seg-quote-sent" :class="q.sentiment > 0 ? 'r-voc-sent-pos' : 'r-voc-sent-neg'">{{ q.sentiment?.toFixed(2) }}</span></blockquote>
+                    </div>
+                    <div class="r-voc-seg-col">
+                      <h4 class="r-voc-col-title">Variant B</h4>
+                      <blockquote
+                        v-for="(q, qi) in (seg.quotes_b || []).slice(0, 3)"
+                        :key="'b'+qi"
+                        class="r-voc-seg-quote"
+                      >"{{ q.quote }}" <span class="r-voc-seg-quote-sent" :class="q.sentiment > 0 ? 'r-voc-sent-pos' : 'r-voc-sent-neg'">{{ q.sentiment?.toFixed(2) }}</span></blockquote>
+                    </div>
+                  </div>
+                </div>
+              </transition>
+            </div>
+          </div>
+        </section>
+
+        <!-- ═══════ Section 7: Mechanism + Risk + Watch ═══════ -->
         <section class="r-section">
           <div class="r-analysis-block">
             <h3 class="r-analysis-label">WHY {{ prediction.winner?.toUpperCase() }} WINS</h3>
@@ -335,6 +425,8 @@ const loadError = ref(null)
 const prediction = ref(null)
 const experiment = ref(null)
 const signals = ref(null)
+const voc = ref(null)
+const expandedVocSeg = ref(null)
 
 // ─── Copy Summary ──────────────────────────────────────────────────────────────
 
@@ -523,7 +615,7 @@ async function loadPrediction() {
       }
     }
 
-    // Load run signals
+    // Load run signals + VoC
     const { data: runData } = await axios.get(`/api/prelude/experiments/${props.id}/simulation/runs`)
     if (runData.signals) {
       signals.value = runData.signals
@@ -533,6 +625,10 @@ async function loadPrediction() {
           signals.value[field] = JSON.parse(signals.value[field])
         }
       }
+    }
+    // VoC data (v1 mode)
+    if (runData.voc) {
+      voc.value = typeof runData.voc === 'string' ? JSON.parse(runData.voc) : runData.voc
     }
 
   } catch (e) {
@@ -1241,5 +1337,194 @@ onMounted(() => {
 .r-cal-textarea:focus {
   outline: none;
   border-color: #4AE89A;
+}
+
+/* ─── Voice of Customer (v1) ─────────────────────────────────────────────── */
+.r-voc-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0D0F0E;
+  background: #4AE89A;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-left: 10px;
+  vertical-align: middle;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.r-voc-highlights {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.r-voc-quote-card {
+  background: #161A18;
+  border-radius: 10px;
+  padding: 16px 18px;
+  border-left: 3px solid #3A4440;
+  transition: border-color 0.2s;
+}
+.r-voc-positive { border-left-color: #4AE89A; }
+.r-voc-negative { border-left-color: #F07858; }
+.r-voc-neutral  { border-left-color: #F0A843; }
+
+.r-voc-quote-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.r-voc-agent {
+  font-size: 12px;
+  font-weight: 600;
+  color: #E8EAE9;
+}
+.r-voc-variant {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+.r-voc-variant-a { background: #0D2E1E; color: #4AE89A; }
+.r-voc-variant-b { background: #2E1A14; color: #F07858; }
+
+.r-voc-text {
+  font-size: 14px;
+  color: #C0C4C2;
+  line-height: 1.6;
+  margin: 0 0 10px;
+  font-style: italic;
+}
+
+.r-voc-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.r-voc-step {
+  font-size: 11px;
+  color: #5A6460;
+  text-transform: capitalize;
+}
+.r-voc-sentiment {
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
+}
+.r-voc-sent-pos { color: #4AE89A; }
+.r-voc-sent-neg { color: #F07858; }
+
+/* VoC summary stats */
+.r-voc-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 28px;
+  padding: 18px 24px;
+  background: #111413;
+  border-radius: 10px;
+  border: 1px solid #1E2421;
+}
+.r-voc-summary-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+.r-voc-summary-num {
+  font-size: 28px;
+  font-weight: 700;
+  color: #4AE89A;
+}
+.r-voc-summary-label {
+  font-size: 12px;
+  color: #5A6460;
+  margin-top: 4px;
+}
+
+/* VoC segment rows */
+.r-voc-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.r-voc-seg-row {
+  background: #161A18;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.r-voc-seg-row:hover { background: #1A1F1D; }
+.r-voc-seg-row.expanded { background: #1A1F1D; }
+
+.r-voc-seg-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  gap: 12px;
+}
+.r-voc-seg-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #E8EAE9;
+  flex: 1;
+}
+.r-voc-seg-pref {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.r-voc-pref-a { background: #0D2E1E; color: #4AE89A; }
+.r-voc-pref-b { background: #2E1A14; color: #F07858; }
+.r-voc-pref-split { background: #1E2421; color: #8A9490; }
+
+.r-voc-seg-scores {
+  font-size: 12px;
+  font-family: 'DM Mono', monospace;
+  color: #5A6460;
+}
+.r-voc-seg-chevron {
+  font-size: 18px;
+  color: #5A6460;
+  width: 20px;
+  text-align: center;
+}
+
+.r-voc-seg-detail {
+  padding: 0 18px 18px;
+}
+.r-voc-seg-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.r-voc-col-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5A6460;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0 0 12px;
+}
+.r-voc-seg-quote {
+  font-size: 13px;
+  color: #8A9490;
+  line-height: 1.6;
+  font-style: italic;
+  margin: 0 0 10px;
+  padding-left: 12px;
+  border-left: 2px solid #1E2421;
+}
+.r-voc-seg-quote-sent {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
+  font-style: normal;
 }
 </style>

@@ -60,7 +60,8 @@ def get_runs(exp_id):
                rs.friction_heatmap,
                rs.sentiment_arc,
                rs.top_quotes,
-               rs.behavioral_patterns
+               rs.behavioral_patterns,
+               rs.voc_output
         FROM simulation_runs sr
         LEFT JOIN run_signals rs ON rs.run_id = sr.id
         WHERE sr.experiment_id = %s
@@ -86,9 +87,13 @@ def get_runs(exp_id):
             "behavioral_patterns": latest["behavioral_patterns"],
         }
 
+    # Include VoC if available (v1 mode)
+    voc = latest.get("voc_output") if latest else None
+
     return jsonify({
         "runs": serialized_runs,
         "signals": signals,
+        "voc": voc,
     })
 
 

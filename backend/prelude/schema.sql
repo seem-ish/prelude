@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS experiments (
   success_metric  TEXT,
   product_context TEXT,
   category        TEXT,
+  feature_signals JSONB,
   status          TEXT DEFAULT 'draft',
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -94,6 +95,7 @@ CREATE TABLE IF NOT EXISTS run_signals (
   sentiment_arc       JSONB,
   top_quotes          JSONB,
   behavioral_patterns JSONB,
+  voc_output          JSONB,
   created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
